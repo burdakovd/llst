@@ -14,6 +14,7 @@ class radix_tree_it : public std::iterator<std::forward_iterator_tag,
 
 public:
         radix_tree_it() : m_pointee(0) { }
+        radix_tree_it(radix_tree_node<K, T> *p) : m_pointee(p) { }
         ~radix_tree_it() { }
 
         std::pair<const K, T>&     operator*  () const;
@@ -26,7 +27,6 @@ public:
 
 private:
         radix_tree_node<K, T> *m_pointee;
-        radix_tree_it(radix_tree_node<K, T> *p) : m_pointee(p) { }
 
         radix_tree_node<K, T>* increment(radix_tree_node<K, T>* node);
         radix_tree_node<K, T>* descend(radix_tree_node<K, T>* node);
