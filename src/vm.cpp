@@ -1127,6 +1127,7 @@ void SmalltalkVM::printVMStat()
 }
 
 struct TMetaString : public TObject {
+    /*
     TObject* readline(TObject* prompt) {
         // TODO Unicode support
 
@@ -1147,7 +1148,7 @@ struct TMetaString : public TObject {
             return result;
         } else
             return globals.nilObject;
-    }
+    }*/
 };
 
 void SmalltalkVM::registerBuiltinNatives() {
@@ -1162,5 +1163,5 @@ void SmalltalkVM::registerBuiltinNatives() {
     registerNativeMethods(getClass("Dictionary"), dictionaryMethods);
     registerNativeMethods(getClass("Array"), arrayMethods);
 
-    addMethod(getClass("MetaString"), getSymbol("readline:"), new TNativeMethod1(&TMetaString::readline));
+    //addMethod(getClass("MetaString"), getSymbol("readline:"), new TNativeMethod1(&TMetaString::readline));
 }
