@@ -66,9 +66,9 @@ TObject* callPrimitive(uint8_t opcode, TObjectArray* arguments, bool& primitiveF
 
         case primitive::getSize: { // 4
             TObject* object     = args[0];
-            uint32_t objectSize = isSmallInteger(object) ? 0 : object->getSize();
+            TInteger objectSize = isSmallInteger(object) ? 0 : object->getSize();
 
-            return reinterpret_cast<TObject*>(newInteger(objectSize));
+            return objectSize;
         } break;
 
         case primitive::stringAt:      // 21
@@ -95,7 +95,7 @@ TObject* callPrimitive(uint8_t opcode, TObjectArray* arguments, bool& primitiveF
 
             // Smalltalk indexes arrays starting from 1, not from 0
             // So we need to recalculate the actual array index before
-            uint32_t actualIndex = getIntegerValue(reinterpret_cast<TInteger>(indexObject)) - 1;
+            uint32_t actualIndex = static_cast<int32_t>(TInteger(indexObject)) - 1;
 
             // Checking boundaries
             if (actualIndex >= string->getSize()) {
@@ -105,12 +105,12 @@ TObject* callPrimitive(uint8_t opcode, TObjectArray* arguments, bool& primitiveF
 
             if (opcode == primitive::stringAt)
                 // String:at
-                return reinterpret_cast<TObject*>(newInteger( string->getByte(actualIndex) ));
+                return TInteger(string->getByte(actualIndex));
             else {
                 // String:at:put
-                TInteger value = reinterpret_cast<TInteger>(valueObject);
-                string->putByte(actualIndex, getIntegerValue(value));
-                return static_cast<TObject*>(string);
+                TInteger value = valueObject;
+                string->putByte(actualIndex, static_cast<int32_t>(value));
+                return string;
             }
         } break;
 
@@ -146,8 +146,8 @@ TObject* callPrimitive(uint8_t opcode, TObjectArray* arguments, bool& primitiveF
             }
 
             // Extracting values
-            int32_t leftOperand  = getIntegerValue(reinterpret_cast<TInteger>(leftObject));
-            int32_t rightOperand = getIntegerValue(reinterpret_cast<TInteger>(rightObject));
+            int32_t leftOperand  = TInteger(leftObject);
+            int32_t rightOperand = TInteger(rightObject);
 
             // Performing an operation
             return callSmallIntPrimitive(opcode, leftOperand, rightOperand, primitiveFailed);
@@ -157,7 +157,7 @@ TObject* callPrimitive(uint8_t opcode, TObjectArray* arguments, bool& primitiveF
         case primitive::getSystemTicks: { //253
             timeval tv;
             gettimeofday(&tv, NULL);
-            return reinterpret_cast<TObject*>(newInteger( (tv.tv_sec*1000000 + tv.tv_usec) / 1000));
+            return TInteger( (tv.tv_sec*1000000 + tv.tv_usec) / 1000);
         } break;
 
         default: {
@@ -172,21 +172,21 @@ TObject* callPrimitive(uint8_t opcode, TObjectArray* arguments, bool& primitiveF
 TObject* callSmallIntPrimitive(uint8_t opcode, int32_t leftOperand, int32_t rightOperand, bool& primitiveFailed) {
     switch (opcode) {
         case primitive::smallIntAdd:
-            return reinterpret_cast<TObject*>(newInteger( leftOperand + rightOperand )); //FIXME possible overflow
+            return TInteger( leftOperand + rightOperand ); //FIXME possible overflow
 
         case primitive::smallIntDiv:
             if (rightOperand == 0) {
                 primitiveFailed = true;
                 return globals.nilObject;
             }
-            return reinterpret_cast<TObject*>(newInteger( leftOperand / rightOperand ));
+            return TInteger( leftOperand / rightOperand );
 
         case primitive::smallIntMod:
             if (rightOperand == 0) {
                 primitiveFailed = true;
                 return globals.nilObject;
             }
-            return reinterpret_cast<TObject*>(newInteger( leftOperand % rightOperand ));
+            return TInteger( leftOperand % rightOperand );
 
         case primitive::smallIntLess:
             if (leftOperand < rightOperand)
@@ -201,16 +201,16 @@ TObject* callSmallIntPrimitive(uint8_t opcode, int32_t leftOperand, int32_t righ
                 return globals.falseObject;
 
         case primitive::smallIntMul:
-            return reinterpret_cast<TObject*>(newInteger( leftOperand * rightOperand )); //FIXME possible overflow
+            return TInteger( leftOperand * rightOperand ); //FIXME possible overflow
 
         case primitive::smallIntSub:
-            return reinterpret_cast<TObject*>(newInteger( leftOperand - rightOperand )); //FIXME possible overflow
+            return TInteger( leftOperand - rightOperand ); //FIXME possible overflow
 
         case primitive::smallIntBitOr:
-            return reinterpret_cast<TObject*>(newInteger( leftOperand | rightOperand ));
+            return TInteger( leftOperand | rightOperand );
 
         case primitive::smallIntBitAnd:
-            return reinterpret_cast<TObject*>(newInteger( leftOperand & rightOperand ));
+            return TInteger( leftOperand & rightOperand );
 
         case primitive::smallIntBitShift: {
             // operator << if rightOperand < 0, operator >> if rightOperand >= 0
@@ -229,7 +229,7 @@ TObject* callSmallIntPrimitive(uint8_t opcode, int32_t leftOperand, int32_t righ
                 }
             }
 
-            return reinterpret_cast<TObject*>(newInteger(result));
+            return TInteger(result);
         }
 
         default:
@@ -247,19 +247,17 @@ TObject* callIOPrimitive(uint8_t opcode, TObjectArray& args, bool& primitiveFail
             if (input == EOF)
                 return globals.nilObject;
             else
-                return reinterpret_cast<TObject*>(newInteger(input));
+                return TInteger(input);
         } break;
 
         case primitive::ioPutChar: { // 3
-            TInteger charObject = reinterpret_cast<TInteger>(args[0]);
-            int8_t   charValue  = getIntegerValue(charObject);
-
-            std::putchar(charValue);
+            std::putchar(TInteger(args[0]));
         } break;
 
         case primitive::ioFileOpen: { // 100
+            // TODO: checked_cast?
             TString* name = args.getField<TString>(0);
-            int32_t  mode = getIntegerValue(reinterpret_cast<TInteger>( args[1] ));
+            int32_t  mode = TInteger(args[1]);
 
             //We have to pass NULL-terminated string to open()
             //The easiest way is to build it with std::string
@@ -269,12 +267,12 @@ TObject* callIOPrimitive(uint8_t opcode, TObjectArray& args, bool& primitiveFail
             if (fileID < 0) {
                 primitiveFailed = true;
             } else {
-                return reinterpret_cast<TObject*>( newInteger(fileID) );
+                return TInteger(fileID);
             }
         } break;
 
         case primitive::ioFileClose: { // 103
-            int32_t fileID = getIntegerValue(reinterpret_cast<TInteger>( args[0] ));
+            int32_t fileID = TInteger( args[0] );
 
             int32_t result = close(fileID);
             if (result < 0) {
@@ -283,29 +281,29 @@ TObject* callIOPrimitive(uint8_t opcode, TObjectArray& args, bool& primitiveFail
         } break;
 
         case primitive::ioFileSetStatIntoArray: { // 105
-            int32_t fileID = getIntegerValue(reinterpret_cast<TInteger>( args[0] ));
+            int32_t fileID = TInteger( args[0] );
             TObjectArray* array = args.getField<TObjectArray>(1);
 
             struct stat fileStat;
             if( fstat(fileID, &fileStat) < 0 ) {
                 primitiveFailed = true;
             } else {
-                TObject* size = reinterpret_cast<TObject*>( newInteger( fileStat.st_size ));
+                TInteger size = fileStat.st_size;
                 array->putField(0, size);
 
-                TObject* inode = reinterpret_cast<TObject*>( newInteger( fileStat.st_ino ));
+                TInteger inode = fileStat.st_ino;
                 array->putField(1, inode);
 
-                TObject* modeMask = reinterpret_cast<TObject*>( newInteger( fileStat.st_mode ));
+                TInteger modeMask = fileStat.st_mode;
                 array->putField(2, modeMask);
             }
         } break;
 
         case primitive::ioFileReadIntoByteArray:    // 106
         case primitive::ioFileWriteFromByteArray: { // 107
-            int32_t fileID = getIntegerValue(reinterpret_cast<TInteger>( args[0] ));
+            int32_t fileID = TInteger(args[0]);
             TByteArray* bufferArray = args.getField<TByteArray>(1);
-            uint32_t size = getIntegerValue(reinterpret_cast<TInteger>( args[2] ));
+            uint32_t size = TInteger(args[2]);
 
             if ( size > bufferArray->getSize() ) {
                 primitiveFailed = true;
@@ -323,18 +321,18 @@ TObject* callIOPrimitive(uint8_t opcode, TObjectArray& args, bool& primitiveFail
             if (involvedItems < 0) {
                 primitiveFailed = true;
             } else {
-                return reinterpret_cast<TObject*>(newInteger(involvedItems));
+                return TInteger(involvedItems);
             }
 
         } break;
         case primitive::ioFileSeek: { // 108
-            int32_t   fileID = getIntegerValue(reinterpret_cast<TInteger>( args[0] ));
-            int32_t position = getIntegerValue(reinterpret_cast<TInteger>( args[1] ));
+            int32_t   fileID = TInteger( args[0] );
+            int32_t position = TInteger( args[1] );
 
             if( (position < 0) || ((position = lseek(fileID, position, SEEK_SET)) < 0) ) {
                 primitiveFailed = true;
             } else {
-                return reinterpret_cast<TObject*>(newInteger(position));
+                return TInteger(position);
             }
         } break;
 

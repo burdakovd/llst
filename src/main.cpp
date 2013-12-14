@@ -32,6 +32,7 @@
  *    along with LLST.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <algorithm>
 #include <iostream>
 #include <cstdio>
 #include <memory>
@@ -51,19 +52,33 @@ private:
     TInteger field2;
 public:
     TObject* getField1() { return field1; }
-    TObject* getField2() { return reinterpret_cast<TObject*>(field2); }
+    TInteger getField2() { return field2; }
 
-    TObject* setField1(TObject* value) { field1 = value; return this; }
-    TObject* setField2(TObject* value) { field2 = reinterpret_cast<TInteger>(value); return this; }
+    TMyClass* setField1(TObject* value) { field1 = value; return this; }
+    TMyClass* setField2(TInteger value) { std::cerr << "setting: " << value << std::endl; field2 = value; return this; }
 
+    void increment() { ++field2; }
+
+    TString* reverse(TString* string) {
+        std::reverse(string->getBytes(), string->getBytes() + string->getSize());
+        return string;
+    }
+
+    TString* concat(SmalltalkVM* vm, TString* x, TString* y) {
+        std::string ans;
+        ans.insert(ans.end(), x->getBytes(), x->getBytes() + x->getSize());
+        ans.insert(ans.end(), y->getBytes(), y->getBytes() + y->getSize());
+
+        TString* result = static_cast<TString*>(vm->newBinaryObject(globals.stringClass, ans.size()));
+        std::copy(ans.begin(), ans.end(), result->getBytes());
+        return result;
+    }
+
+    static const char* InstanceClassName() {
+        return "MyClass";
+    }
 };
 
-static const TNativeMethodInfo nativeMethods[] = {
-    { "field1",  new TNativeMethod(&TMyClass::getField1) },
-    { "field2",  new TNativeMethod(&TMyClass::getField2) },
-    { "field1:", new TNativeMethod1(&TMyClass::setField1) },
-    { "field2:", new TNativeMethod1(&TMyClass::setField2) }
-};
 
 int main(int argc, char **argv) {
     args llstArgs;
@@ -108,12 +123,12 @@ int main(int argc, char **argv) {
     initContext->arguments = vm.newObject<TObjectArray>(1);
     initContext->arguments->putField(0, globals.nilObject);
 
-    initContext->bytePointer = newInteger(0);
+    initContext->bytePointer = 0;
     initContext->previousContext = static_cast<TContext*>(globals.nilObject);
 
-    const uint32_t stackSize = getIntegerValue(globals.initialMethod->stackSize);
+    const uint32_t stackSize = globals.initialMethod->stackSize;
     initContext->stack = vm.newObject<TObjectArray>(stackSize);
-    initContext->stackTop = newInteger(0);
+    initContext->stackTop = 0;
 
     initContext->method = globals.initialMethod;
 
@@ -121,7 +136,13 @@ int main(int argc, char **argv) {
     //uint32_t tempsSize = getIntegerValue(initContext->method->temporarySize);
     initContext->temporaries = vm.newObject<TObjectArray>(42);
 
-    vm.registerNativeMethods(vm.getClass("MyClass"), nativeMethods);
+    vm.addMethod("field1",  &TMyClass::getField1);
+    vm.addMethod("field2",  &TMyClass::getField2);
+    vm.addMethod("field1:", &TMyClass::setField1);
+    vm.addMethod("field2:", &TMyClass::setField2);
+    vm.addMethod("increment", &TMyClass::increment);
+    vm.addMethod("reverse:", &TMyClass::reverse);
+    vm.addMethod("concat:and:", &TMyClass::concat);
 
     // And starting the image execution!
     SmalltalkVM::TExecuteResult result = vm.execute(initProcess, 0);

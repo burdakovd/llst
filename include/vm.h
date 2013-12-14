@@ -35,12 +35,18 @@
 #ifndef LLST_VM_H_INCLUDED
 #define LLST_VM_H_INCLUDED
 
+#include <iterator>
 #include <list>
 #include <map>
 
+#include <type_traits>
+#include <typeinfo>
 #include <types.h>
 #include <memory.h>
+#include <utility>
+#include <native_method_pointer.h>
 #include <api.h>
+#include <stdexcept>
 
 template <int I>
 struct Int2Type
@@ -83,13 +89,13 @@ private:
         hptr<TObject>  returnedValue;
 
         void loadPointers() {
-            bytePointer = getIntegerValue(currentContext->bytePointer);
-            stackTop    = getIntegerValue(currentContext->stackTop);
+            bytePointer = currentContext->bytePointer;
+            stackTop    = currentContext->stackTop;
         }
 
         void storePointers() {
-            currentContext->bytePointer = newInteger(bytePointer);
-            currentContext->stackTop    = newInteger(stackTop);
+            currentContext->bytePointer = bytePointer;
+            currentContext->stackTop    = stackTop;
         }
 
         void stackPush(TObject* object);
@@ -120,6 +126,7 @@ private:
         TClass*  receiverClass;
         TMethod* method;
     };
+
 
     static const unsigned int LOOKUP_CACHE_SIZE = 512;
     TMethodCacheEntry m_lookupCache[LOOKUP_CACHE_SIZE];
@@ -191,36 +198,70 @@ public:
     template<class T> hptr<T> newPointer(T* object) { return hptr<T>(object, m_memoryManager); }
 
 
-    typedef std::map<TSymbol*, TNativeMethodBase*> TSymbolToNativeMethodMap;
+    typedef std::map<std::string, TNativeMethodBase*> TSymbolToNativeMethodMap;
     typedef std::map<TClass*, TSymbolToNativeMethodMap> TNativeMethodMap;
 
     TNativeMethodMap m_nativeMethods;
 
-    TSymbol* getSymbol(const char* symbol) {
-        return (TSymbol*) globals.nilObject; // TODO
+    const std::string getSymbol(const char* symbol) const {
+        return symbol;//(TSymbol*) globals.nilObject; // TODO
     }
 
-    TClass* getClass(const char* name) {
+    TClass* getClass(const char* name) const {
         return (TClass*) globals.nilObject; // TODO
     }
 
-    TClass* getClass(TSymbol* name) {
+    TClass* getClass(TSymbol* name) const {
         return (TClass*) globals.nilObject; // TODO
     }
 
-    void addMethod(TClass* klass, TSymbol* selector, TNativeMethodBase* method) {
-        m_nativeMethods[klass][selector] = method;
-        // TODO add stub method in the Smalltalk bytecodes
-    }
+    template <typename P>
+    typename std::enable_if<std::is_pointer<P>::value, P>::type
+    checked_cast(TObject* object) const {
+        // replace with pointer_traits when compiler implements it
+        typedef typename std::iterator_traits<P>::value_type T;
 
-    template <std::size_t N>
-    void registerNativeMethods(TClass* klass, const TNativeMethodInfo(&methods)[N]) {
-        TSymbolToNativeMethodMap& methodMap = m_nativeMethods[klass];
-        for (std::size_t i = 0; i < N; i++) {
-            TSymbol* selector = getSymbol(methods[i].selector);
-            methodMap[selector] = methods[i].method;
-            // TODO add stub method in the Smalltalk bytecodes
+        if (isSmallInteger(object)) { throw std::bad_cast(); }
+
+        const TClass* klass = object->getClass();
+
+        // disable most of the checks until getClass is fixed
+        if (0) {
+            size_t rootClassesTraversed = 0;
+
+            // probably slow
+            const TClass* Class = getClass("Class");
+            const TClass* MetaClass = getClass("MetaClass");
+
+            const TClass* expectedClass = getClass(T::InstanceClassName());
+
+            while (rootClassesTraversed < 2 && klass != expectedClass) {
+                klass = klass->parentClass;
+
+                // quite weird to have two root classes
+                if (klass == Class || klass == MetaClass) {
+                    ++rootClassesTraversed;
+                }
+            }
+
+            if (klass != expectedClass) {
+                throw std::bad_cast();
+            }
         }
+
+        return static_cast<P>(object);
+    }
+
+    template <typename T, typename R, typename... Args>
+    void addMethod(const char* selector, R (T::*method)(Args...)) {
+        // warning: it's too easy to forget override InstanceClassName in derived class
+        // it breakes type-safety
+        TClass* klass = getClass(T::InstanceClassName());
+        TNativeMethodBase* wrapper =
+            new TNativeMethodPointer<SmalltalkVM, T, R, Args...>(method);
+
+        m_nativeMethods[klass][getSymbol(selector)] = wrapper;
+        // TODO add stub method in the Smalltalk bytecodes
     }
 
     void registerBuiltinNatives();

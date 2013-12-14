@@ -18,10 +18,10 @@ public:
             // Here we may perform optimization for well known types
             if (isSmallInteger(leftObject) || isSmallInteger(rightObject)) {
                 if (isSmallInteger(leftObject) && isSmallInteger(rightObject)) {
-                    TInteger leftValue  = reinterpret_cast<TInteger>(leftObject);
-                    TInteger rightValue = reinterpret_cast<TInteger>(rightObject);
+                    TInteger leftValue  = leftObject;
+                    TInteger rightValue = rightObject;
 
-                    return getIntegerValue(leftValue) < getIntegerValue(rightValue);
+                    return leftValue < rightValue;
                 } else
                     return false; // TODO Send message <
             } else if (leftObject->getClass() == globals.stringClass && rightObject->getClass() == globals.stringClass) {

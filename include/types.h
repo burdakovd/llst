@@ -37,6 +37,8 @@
 
 #include <stdint.h>
 #include <sys/types.h>
+#include <iostream>
+#include <memory>
 #include <new>
 #include <string>
 #include <sstream>
@@ -54,15 +56,31 @@ inline std::size_t correctPadding(std::size_t size) { return (size + sizeof(void
 // This is a special interpretation of Smalltalk's SmallInteger
 // VM handles the special case when object pointer has lowest bit set to 1
 // In that case pointer is treated as explicit 31 bit integer equal to (value >> 1)
-// Any operation should be done using SmalltalkVM::getIntegerValue() and SmalltalkVM::newInteger()
-// Explicit type cast should be strictly avoided for the sake of design and stability
-// TODO May be we should refactor TInteger to a class which provides cast operators.
-typedef int32_t TInteger;
 
-// Helper functions for TInteger operation
-inline bool     isSmallInteger(const TObject* value) { return reinterpret_cast<TInteger>(value) & 1; }
-inline int32_t  getIntegerValue(TInteger value) { return (value >> 1); }
-inline TInteger newInteger(int32_t value) { return (value << 1) | 1; }
+inline bool isSmallInteger(const TObject* value) { return reinterpret_cast<int32_t>(value) & 1; }
+
+// The class is binary compatible with the TObject*
+class TInteger {
+public:
+    TInteger(int32_t value) : m_value(newInteger(value)) { }
+    TInteger(const TObject* value) : m_value(isSmallInteger(value) ? value : throw std::bad_cast()) { }
+
+    operator int32_t() const { return getIntegerValue(m_value); }
+    operator TObject*() const { return const_cast<TObject*>(m_value); }
+
+    TInteger& operator ++() { return *this = TInteger(int32_t(*this) + 1); }
+
+private:
+    static_assert(sizeof(TObject*) == sizeof(int32_t), "sizes of pointer and int32_t are not equal");
+
+    static int32_t  getIntegerValue(const TObject* value) { return reinterpret_cast<int32_t>(value) >> 1; }
+    static TObject* newInteger(int32_t value) { return reinterpret_cast<TObject*>((value << 1) | 1); }
+
+    const TObject* m_value;
+};
+
+inline std::ostream& operator <<(std::ostream& os, const TInteger& x) { return os << static_cast<int32_t>(x); }
+inline bool operator <(const TInteger& lhs, const TInteger& rhs) { return static_cast<int32_t>(lhs) < static_cast<int32_t>(rhs); }
 
 // Helper struct used to hold object size and special
 // status flags packed in a 4 bytes space. TSize is used
@@ -121,11 +139,10 @@ protected:
         uint8_t  bytes[0];
     };
 
-private:
-    // This class should not be instantinated explicitly
-    // Descendants should provide own public InstanceClassName method
-    static const char* InstanceClassName() { return ""; }
 public:
+    // Descendants should provide own public InstanceClassName
+    static const char* InstanceClassName() { return "TObject"; }
+
     // this should only be called from Image::readObject
     void setClass(TClass* aClass) { klass = aClass; }
 
@@ -142,7 +159,7 @@ public:
 
     // TODO boundary checks
     TObject** getFields() { return fields; }
-    TObject*  getField(uint32_t index) { return fields[index]; }
+    TObject*  getField(uint32_t index) const { return fields[index]; }
     TObject*& operator [] (uint32_t index) { return fields[index]; }
     void putField(uint32_t index, TObject* value) { fields[index] = value; }
 
@@ -245,7 +262,7 @@ struct TArray : public TObject {
     TArray(uint32_t capacity, TClass* klass) : TObject(capacity, klass) { }
     static const char* InstanceClassName() { return "Array"; }
 
-    Element* getField(uint32_t index) { return static_cast<Element*>(fields[index]); }
+    Element* getField(uint32_t index) const { return static_cast<Element*>(fields[index]); }
     template <typename Type> Type* getField(uint32_t index) { return static_cast<Type*>(fields[index]); }
 
     // NOTE: Unlike C languages, indexing in Smalltalk is started from the 1.

@@ -71,6 +71,7 @@ RAWCLASS Char          MetaChar      Magnitude         value
 CLASS Collection    Magnitude
 CLASS List          Collection        elements size
 CLASS Dictionary    Collection        keys values
+CLASS MyClass       Object            field1 field2
 CLASS Array         Collection
 CLASS OrderedArray  Array
 CLASS ByteArray     Array
@@ -560,6 +561,39 @@ arguments
 METHOD Dictionary
 keys
     ^keys
+!
+
+METHOD MyClass
+reverse: string
+  <247>
+!
+METHOD MyClass
+concat: string and: string2
+  <247>
+!
+METHOD MyClass
+field1
+  <247>
+!
+
+METHOD MyClass
+field1: value
+  <247>
+!
+
+METHOD MyClass
+field2
+  <247>
+!
+
+METHOD MyClass
+field2: value
+  <247>
+!
+
+METHOD MyClass
+increment
+  <247>
 !
 
 CLASS TestProcess Process
@@ -1106,6 +1140,47 @@ METHOD PrimitiveTest
 bulkReplace
     [ <38 1 7 'Hello W' 1 'hello world!'> ] assertEq: 'Hello World!'.
 !
+
+CLASS MyClassTest Test
+
+METHOD MyClassTest
+test |instance|
+    instance <- MyClass new.
+
+    [instance field1] assertEq: nil withComment: 'Initally nil'.
+
+    nil print.
+    'field is initialized with nil which is NOT smallint'
+    'COMMENT    [instance field2] assertEq: 0'.
+    
+    ' type mismatch'.
+    [instance field1:42] assertEq: nil withComment: 'set field1 with invalid type'.
+
+    [instance field1:'foo'] assertEq: instance withComment: 'set field1'.
+    [instance field1] assertEq: 'foo' withComment: 'get field1'.
+
+    ' type mismatch'.
+    [instance field2:'bar'] assertEq: nil withComment: 'set field2 with invalid type'.
+
+    [instance field2:42] assertEq: instance withComment: 'set field2'.
+    [instance field2] assertEq: 42 withComment: 'get field2'.
+
+    [instance increment] assertEq: nil withComment: 'increment'.
+    [instance field2] assertEq: 43 withComment: 'get incremented'.
+
+    [instance reverse:'bar'] assertEq: 'rab' withComment: 'reverse'.
+    [instance reverse:42] assertEq: nil withComment: 'reverse: type mismatch (integer)'.
+    [instance reverse:instance] assertEq: nil withComment: 'reverse: type mismatch (object)'.
+
+    [instance concat:'foo' and:'bar'] assertEq: 'foobar' withComment: 'concat'
+    [instance concat:'foo' and:nil] print.
+    [instance concat:'foo' and:nil] assertEq: nil withComment: 'concat: type mismatch'
+    [instance concat:'foo' and:10] assertEq: nil withComment: 'concat: type mismatch'
+    [instance concat:'foo' and:Object] assertEq: nil withComment: 'concat: type mismatch'
+
+
+!
+
 
 COMMENT                                                                                                 -------ListTest----------
 CLASS ListTest Test
@@ -1701,6 +1776,7 @@ main    | command  data |
     SmallIntTest new runAll.
     ArrayTest new runAll.
     PrimitiveTest new runAll.
+    MyClassTest new runAll.
     MagnitudeTest new runAll.
     ListTest new runAll.
     MethodLookupTest new runAll.
